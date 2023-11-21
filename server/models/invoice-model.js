@@ -1,8 +1,8 @@
 const mongoose = require('mongoose')
 
 const invoiceSchema = new mongoose.Schema({
-    invoiceItems: [{ type: String, required: true }],
-    storeBranch: { type: mongoose.Types.ObjectId, ref: "Branch", required: true },
+    invoiceItems: [{ type: mongoose.Types.ObjectId, ref: "SaleItems", required: true }],
+    storeBranch: { type: mongoose.Types.ObjectId, ref: "Branch", required: true, unique: true },
     paymentStatus: { type: String, enum: ['PAID', 'PARTIAL', 'DUE'], required: true },
     paymentMethod: { type: String, enum: ['CASH', 'TRANSFER', 'POS', 'MULTIPLE'], required: true },
     totalCost: { type: Number, trim: true, required: true },

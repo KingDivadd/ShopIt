@@ -4,9 +4,10 @@ const { StatusCodes } = require('http-status-codes')
 const User = require("../models/user-model")
 const Branch = require("../models/branch-model")
 
+
 // only the CEO can create branch. and on creation only the location is required, the rest can be filled later.
 const createBranch = asyncHandler(async(req, res) => {
-    const { location, branchManager, storeManager, salesPerson, productList, invoiceList, orderList } = req.body
+    const { location, branchManager, storeManager, salesPerson, } = req.body
     if (req.info.id.role === "CEO") {
         if (!location) {
             res.status(StatusCodes.BAD_REQUEST).json({ err: `Please provide location for the Branch` })
@@ -28,8 +29,9 @@ const createBranch = asyncHandler(async(req, res) => {
     }
 })
 
+// add branch staffs 
 const addBranchStaffs = asyncHandler(async(req, res) => {
-    const { branch_id, branchManager, storeManager, salesPerson, } = req.body
+    const { branch_id, location, branchManager, storeManager, salesPerson, } = req.body
     if (req.info.id.role !== 'CEO' && req.info.id.role !== 'BRANCH MANAGER') {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
@@ -39,6 +41,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
     }
     const update = {}
+        // only the CEO or business owner can change the branchManager
     if (req.info.id.role === 'CEO') {
         if (branchManager.trim() !== '') {
             // ensure that his role is a store manager
@@ -50,14 +53,26 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
                 return res.status(500).json({ err: `Error... Selected user's role for BM's position is not branch manager!!!` })
             }
             update.branchManager = branchManager.trim()
-        } else {
+            await User.findOneAndUpdate({ _id: branchManager }, { branch: branch_id }, { new: true, runValidators: true })
+        }
+        if (branchManager.trim() === null) {
             update.branchManager = null
+            await User.findOneAndUpdate({ _id: branchManager }, { branch: null }, { new: true, runValidators: true })
         }
     }
+
     // also ensure the branch manager can only make changes to his branch
     const bmAccess = await User.findOne({ _id: req.info.id.id })
-    console.log(bmAccess.branch)
     if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && bmAccess.branch.toString() === branch_id)) {
+        if (location.trim() !== '') {
+            // check if the location already exist
+            const locationExist = await Branch.findOne({ location })
+            if (locationExist) {
+                return res.status(500).json({ err: `Error... ${location} is already a registred location!!!` })
+            }
+            update.location = location.trim()
+        }
+
         if (storeManager.trim() !== '') {
             const isSM = await User.findOne({ _id: storeManager })
             if (!isSM) {
@@ -67,8 +82,11 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
                 return res.status(500).json({ err: `Error... Selected user's role for store manager's positon is not a store manager!!!` })
             }
             update.storeManager = storeManager.trim()
-        } else {
+            await User.findOneAndUpdate({ _id: storeManager }, { branch: branch_id }, { new: true, runValidators: true })
+        }
+        if (storeManager.trim() === null) {
             update.storeManager = null
+            await User.findOneAndUpdate({ _id: storeManager }, { branch: null }, { new: true, runValidators: true })
         }
 
         if (salesPerson.trim() !== '') {
@@ -80,71 +98,26 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
                 return res.status(500).json({ err: `Error... Selected user's role for sales position is not a sales person!!!` })
             }
             update.salesPerson = salesPerson.trim()
-        } else {
+            await User.findOneAndUpdate({ _id: salesPerson }, { branch: branch_id }, { new: true, runValidators: true })
+        }
+        if (salesPerson.trim() === null) {
             update.salesPerson = null
+            await User.findOneAndUpdate({ _id: salesPerson }, { branch: null }, { new: true, runValidators: true })
         }
     } else {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to make these changes!!!` })
     }
 
     const updateBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $set: update }, { new: true, runValidators: true })
-    if (updateBranch) {
-        if (updateBranch.branchManager !== null) {
-            await User.findOneAndUpdate({ _id: branchManager }, { branch: branch_id })
-        }
-        if (updateBranch.storeManager !== null) {
-            await User.findOneAndUpdate({ _id: storeManager }, { branch: branch_id })
-        }
-        if (updateBranch.salesPerson !== null) {
-            await User.findOneAndUpdate({ _id: salesPerson }, { branch: branch_id })
-        }
-    }
+
     res.status(StatusCodes.OK).json({ msg: `Staff(s) added to ${updateBranch.location} branch successfully...`, branchInfo: updateBranch })
 
 })
 
+// listed below are to be updated in their respective controllers
+
 const updateBranchInfo = asyncHandler(async(req, res) => {
-    const { branch_id, location, branchManager, storeManager, salesPerson, invoiceList, orderList } = req.body
-
-    const locationExist = await Branch.findOne({ location })
-    if (locationExist) {
-        res.status(500).json({ err: `Error... cannot change location to already exit location` })
-    } else {
-        const update = {}
-        if (req.info.id.role === "CEO") {
-            if (branchManager.trim() !== '') {
-                update.branchManager = branchManager.trim()
-            }
-            if (location.trim() !== '') {
-                update.location = location.trim()
-            }
-            // if (productList.trim() !== '') {
-            //     update.productList = productList.trim()
-            // }
-        }
-        if (req.info.id.role === "CEO" || req.info.id.role === "BRANCH MANAGER") {
-            if (storeManager.trim() !== '') {
-                update.storeManager = storeManager.trim()
-            }
-            if (salesPerson.trim() !== '') {
-                update.salesPerson = salesPerson.trim()
-            }
-        }
-        if (req.info.id.role === "CEO" || req.info.id.role === "BRANCH MANAGER" || req.info.id.role === "SALES PERSON") {
-            if (invoiceList.trim() !== '') {
-                update.invoiceList = invoiceList.trim()
-            }
-            if (orderList.trim() !== '') {
-                update.orderList = orderList.trim()
-            }
-        }
-        const branchUpdate = await Branch.findOneAndUpdate({ _id: branch_id }, { $set: update }, { new: true, runValidators: true })
-        if (!branchUpdate) {
-            res.status(500).json({ err: `Error... Unable to update branch information` })
-        }
-
-
-    }
+    const { branch_id, invoiceList, orderList, productList, dailyAcct } = req.body
 })
 const getAllBranch = asyncHandler(async(req, res) => {
     if (req.info.id.role === 'CEO') {

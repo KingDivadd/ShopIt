@@ -8,7 +8,8 @@ const branchSchema = new mongoose.Schema({
     salesPerson: { type: mongoose.Types.ObjectId, ref: "User", default: null },
     productList: [{ type: mongoose.Types.ObjectId, ref: "Product", }],
     invoiceList: [{ type: mongoose.Types.ObjectId, ref: "Invoice", }],
-    orderList: [{ type: mongoose.Types.ObjectId, ref: "Orders", default: null }],
+    orderList: [{ type: mongoose.Types.ObjectId, ref: "Orders", }],
+    dailyAcct: [{ type: mongoose.Types.ObjectId, ref: "DailyAcct", }],
 }, { timestamps: true })
 
 module.exports = mongoose.model("Branch", branchSchema)

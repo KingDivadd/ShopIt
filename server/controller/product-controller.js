@@ -5,10 +5,40 @@ const Product = require("../models/product-model")
 const Branch = require("../models/branch-model")
 
 // the product should be a list
+const getBranchProducts = asyncHandler(async(req, res) => {
+    const { branch_id } = req.body
+    const branchExist = await Branch.findOne({ _id: branch_id })
+    if (!branchExist) {
+        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} is not a registered branch!!!` })
+    }
+    // now only show the product for the logged in user / CEO
+    // if user is not assigned to any branch, then he cannot see any product
+    const assigned = await User.findOne({ _id: req.info.id.id })
+    if ((assigned && assigned.branch && assigned.branch.toString() === branch_id) || req.info.id.role === 'CEO') {
+        // now display all the products in that branch
+        const product = branchExist.productList
+        return res.status(StatusCodes.OK).json({ nbProducts: product.length, productInfo: product })
+    } else {
+        return res.status(500).json({ err: `Error... You must be a registered staff in ${branchExist.location} branch to get info about products!!!` })
+    }
+
+})
+
+const allBranchProducts = asyncHandler(async(req, res) => {
+    if (req.info.id.id !== 'CEO') {
+        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to access / view products from other branches!!!` })
+    }
+    const allProducts = await Product.find({})
+    if (!allProducts) {
+        return res.status(500).json({ err: `Error... Unable to fetch product data!!!` })
+    }
+    return res.status(StatusCodes.OK).json({ nbProducts: allProducts.length, products: allProducts })
+})
+
 const newProduct = asyncHandler(async(req, res) => {
     const { productName, price, productPic, unit, productBranch, quantity } = req.body
     if (!productName || !price || !productPic || !unit || !productBranch) {
-        res.status(500).json({ err: `Please provide all producte related informations` })
+        res.status(500).json({ err: `Please provide all product related informations!!!` })
     }
     if (req.info.role === "CEO") {
         req.body.productAdder = req.info.id
@@ -16,7 +46,7 @@ const newProduct = asyncHandler(async(req, res) => {
             // check if productBranch exist
         const branchExist = await Branch.findOne({ location: productBranch })
         if (!branchExist) {
-            res.status(500).json({ err: `Error... Product cannot be added to an unregisted store branch` })
+            res.status(500).json({ err: `Error... Product cannot be added to an unregisted business branch!!!` })
         }
         const product = await Product.create(req.body)
         if (!product) {
@@ -143,4 +173,4 @@ const deleteProduct = asyncHandler(async(req, res) => {
     }
 })
 
-module.exports = { newProduct, updateProductInfo, transferProduct, deleteProduct }
+module.exports = { newProduct, updateProductInfo, transferProduct, deleteProduct, getBranchProducts, allBranchProducts }

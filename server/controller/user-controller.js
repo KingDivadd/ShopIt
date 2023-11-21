@@ -16,6 +16,13 @@ const allUsers = asyncHandler(async(req, res) => {
     res.status(StatusCodes.OK).json({ nbHit: users.length, users: users })
 })
 
+const everyUsers = asyncHandler(async(req, res) => {
+    const users = await User.find({})
+    if (!users) {
+        return res.status(500).json({ err: `Error... Unable to fetch users!!!` })
+    }
+    res.status(StatusCodes.OK).json({ nbHit: users.length, users: users })
+})
 const oneUser = asyncHandler(async(req, res) => {
     const { user_Id } = req.body
     const userExist = await User.findOne({ _id: user_Id })
@@ -143,11 +150,11 @@ const removeUser = asyncHandler(async(req, res) => {
     if (req.info.id.role === 'CEO') {
         const deleteUser = await User.findOneAndDelete({ _id: user_id })
         if (!deleteUser) {
-            res.status(500).json({ err: "Error... Unable to delete user!!!" })
+            return res.status(500).json({ err: "Error... Unable to delete user!!!" })
         }
         const deleteUserAuth = await Auth.findOneAndDelete({ userId: user_id })
         if (!deleteUserAuth) {
-            res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
+            return res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
         }
     }
 
@@ -157,11 +164,11 @@ const removeUser = asyncHandler(async(req, res) => {
         if (!userExist.branch) {
             const deleteUser = await User.findOneAndDelete({ _id: user_id })
             if (!deleteUser) {
-                res.status(500).json({ err: "Error... Unable to delete user!!!" })
+                return res.status(500).json({ err: "Error... Unable to delete user!!!" })
             }
             const deleteUserAuth = await Auth.findOneAndDelete({ userId: user_id })
             if (!deleteUserAuth) {
-                res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
+                return res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
             }
         } else {
             if (userExist.branch.location !== loggedInUser.branch.location) {
@@ -169,15 +176,15 @@ const removeUser = asyncHandler(async(req, res) => {
             }
             const deleteUser = await User.findOneAndDelete({ _id: user_id })
             if (!deleteUser) {
-                res.status(500).json({ err: "Error... Unable to delete user!!!" })
+                return res.status(500).json({ err: "Error... Unable to delete user!!!" })
             }
             const deleteUserAuth = await Auth.findOneAndDelete({ userId: user_id })
             if (!deleteUserAuth) {
-                res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
+                return res.status(500).json({ err: "Error... Unable to delete user auth!!!" })
             }
         }
     }
-    res.status(StatusCodes.OK).json({ msg: `${deleteUser.name} has been removed from the app` })
+    res.status(StatusCodes.OK).json({ msg: ` has been removed from the app`, deletedUser: deleteUser })
 })
 
-module.exports = { allUsers, oneUser, updateUserInfo, removeUser, findUser }
+module.exports = { allUsers, oneUser, updateUserInfo, removeUser, findUser, everyUsers }

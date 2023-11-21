@@ -6,6 +6,9 @@
     "scripts": {
         "start": "nodemon server/app"
     },
+    "bin": {
+        "execute": "app.js"
+    },
     "author": "KingDivad",
     "license": "ISC",
     "dependencies": {

@@ -16,7 +16,7 @@ const newOfflineSale = asyncHandler(async(req, res) => {
     }
     // lets ensure only the ceo, the sales person and the branch manager can make sales
     if (req.info.id.role !== 'CEO' && (req.info.id.role !== 'BRANCH MANAGER' && req.info.id.id !== branchExist.branchManager.toString()) && (req.info.id.role !== 'SALES PERSON' && req.info.id.id !== branchExist.salesPerson.toString())) {
-        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Not authorized to make sale in ${branch.location} barnch!!!` })
+        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Not authorized to make sale in ${branchExist.location} barnch!!!` })
     }
     // now we check if the product exist and in that branch
 

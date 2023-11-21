@@ -6,33 +6,56 @@ const Branch = require("../models/branch-model")
 
 // the product should be a list
 const getBranchProducts = asyncHandler(async(req, res) => {
-    const { branch_id } = req.body
-    const branchExist = await Branch.findOne({ _id: branch_id })
-    if (!branchExist) {
-        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} is not a registered branch!!!` })
-    }
-    // now only show the product for the logged in user / CEO
-    // if user is not assigned to any branch, then he cannot see any product
-    const assigned = await User.findOne({ _id: req.info.id.id })
-    if ((assigned && assigned.branch && assigned.branch.toString() === branch_id) || req.info.id.role === 'CEO') {
-        // now display all the products in that branch
-        const product = branchExist.productList
-        return res.status(StatusCodes.OK).json({ nbProducts: product.length, productInfo: product })
-    } else {
-        return res.status(500).json({ err: `Error... You must be a registered staff in ${branchExist.location} branch to get info about products!!!` })
-    }
+    res.send("testing")
+        // const { branch_id } = req.body
+        // const branchExist = await Branch.findOne({ _id: branch_id })
+        // if (!branchExist) {
+        //     return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} is not a registered branch!!!` })
+        // }
+        // // now only show the product for the logged in user / CEO
+        // // if user is not assigned to any branch, then he cannot see any product
+        // const assigned = await User.findOne({ _id: req.info.id.id })
+        // if ((assigned && assigned.branch && assigned.branch.toString() === branch_id) || req.info.id.role === 'CEO') {
+        //     // now display all the products in that branch
+        //     const product = branchExist.productList
+        //     return res.status(StatusCodes.OK).json({ nbProducts: product.length, productInfo: product })
+        // } else {
+        //     return res.status(500).json({ err: `Error... You must be a registered staff in ${branchExist.location} branch to get info about products!!!` })
+        // }
 
 })
 
-const allBranchProducts = asyncHandler(async(req, res) => {
-    if (req.info.id.id !== 'CEO') {
-        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to access / view products from other branches!!!` })
+const allProducts = asyncHandler(async(req, res) => {
+
+    if (req.info.id.role !== 'CEO') {
+        const allProducts = await Product.find({})
+        if (!allProducts) {
+            return res.status(500).json({ err: `Error... Unable to fetch product data!!!` })
+        }
+        // return res.status(StatusCodes.OK).json({ nbProducts: allProducts.length, products: allProducts })
     }
-    const allProducts = await Product.find({})
-    if (!allProducts) {
-        return res.status(500).json({ err: `Error... Unable to fetch product data!!!` })
+
+    const user = await User.findOne({ _id: req.info.id.id })
+    if (!user) {
+        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... User with ID ${user._id} was not found!!!` })
     }
-    return res.status(StatusCodes.OK).json({ nbProducts: allProducts.length, products: allProducts })
+    const branch_id = user.branch
+    if (branch_id === null) {
+        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Only branch registred users can view branch products!!!` })
+    }
+    const branchExist = await Branch.findOne({ _id: String(branch_id) })
+    if (!branchExist) {
+        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
+    }
+    const product = await Product.find({
+        productBranch: { $eq: branch_id }
+    })
+    if (!product.length) {
+        return res.status(StatusCodes.OK).json({ msg: `No product has been added to ${branchExist.location} branch yet...` })
+    }
+    return res.status(200).json({ location: branchExist.location, numProducts: product.length, products: product })
+
+
 })
 
 const newProduct = asyncHandler(async(req, res) => {
@@ -134,7 +157,7 @@ const transferProduct = asyncHandler(async(req, res) => {
     let product = productList(productList.indexOf(product_id))
         // the product above is in form of an ID
         // new we will pupulate the product to get the rem. qty
-    const fetchProduct = await Product.findOne({ _id: product }).populate()
+    const fetchProduct = await Product.findOne({ _id: product })
     if (!fetchProduct) {
         res.status(StatusCodes.NOT_FOUND).json({ err: `Error fetching product` })
     }
@@ -146,10 +169,10 @@ const transferProduct = asyncHandler(async(req, res) => {
     productList(productList.indexOf(product_id)) = oldBranchProductQty
     const updateOldBranch = await Branch.findOneAndUpdate({ location: oldBranch }, { productList }, { new: true, runValidators: true })
     if (!updateOldBranch) {
-        res.status(500).json({ err: `Error... Could not update the old branch with new prudct quantity` })
+        res.status(500).json({ err: `Error... Could not update the old branch with new prudct quantity!!!` })
     }
     // now in the new branch, 1. we first check if it exist. 2. we then check if there's a product with similar name (if yes we add to it, and if no, we create a new one)
-    const newBranchExist = await Branch.findOne({ location: newBranch }).populate()
+    const newBranchExist = await Branch.findOne({ location: newBranch })
     if (!newBranchExist) {
         res.status(StatusCodes.NOT_FOUND).json({ err: `Secondary branch does not exist. Create the branch before atempting to transfer product` })
     }
@@ -190,8 +213,8 @@ const deleteProduct = asyncHandler(async(req, res) => {
         }
         res.status(StatusCodes.OK).json({ msg: `Product deleted successfully`, productInfo: product })
     } else {
-        res.status(StatusCodes.UNAUTHORIZED).json({ err: `${req.info.name}, you're not authorized to perfom this operation` })
+        res.status(StatusCodes.UNAUTHORIZED).json({ err: `${req.info.name}, you're not authorized to perfom this operation!!!` })
     }
 })
 
-module.exports = { newProduct, updateProductInfo, transferProduct, deleteProduct, getBranchProducts, allBranchProducts }
+module.exports = { newProduct, updateProductInfo, transferProduct, deleteProduct, getBranchProducts, allProducts }

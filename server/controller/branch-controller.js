@@ -31,7 +31,7 @@ const createBranch = asyncHandler(async(req, res) => {
 
 // add branch staffs 
 const addBranchStaffs = asyncHandler(async(req, res) => {
-    const { branch_id, location, branchManager, storeManager, salesPerson, } = req.body
+    const { branch_id, branchManager, storeManager, salesPerson, } = req.body
     if (req.info.id.role !== 'CEO' && req.info.id.role !== 'BRANCH MANAGER') {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
@@ -64,14 +64,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
     // also ensure the branch manager can only make changes to his branch
     const bmAccess = await User.findOne({ _id: req.info.id.id })
     if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && bmAccess.branch.toString() === branch_id)) {
-        if (location.trim() !== '') {
-            // check if the location already exist
-            const locationExist = await Branch.findOne({ location })
-            if (locationExist) {
-                return res.status(500).json({ err: `Error... ${location} is already a registred location!!!` })
-            }
-            update.location = location.trim()
-        }
+
 
         if (storeManager.trim() !== '') {
             const isSM = await User.findOne({ _id: storeManager })
@@ -115,16 +108,30 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
 })
 
 // listed below are to be updated in their respective controllers
-
-const updateBranchInfo = asyncHandler(async(req, res) => {
-    const { branch_id, invoiceList, orderList, productList, dailyAcct } = req.body
+const changeBranchLocation = asyncHandler(async(req, res) => {
+    const { branch_id, location } = req.body
+    const user = await User.findOne({ _id: req.info.id.id })
+    if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && String(user.branch) === branch_id)) {
+        // make sure the entered branch is not already in use
+        const locationExist = await Branch.find({ location })
+        if (locationExist.length) {
+            return res.status(500).json({ err: `Selected location already exist, please choose another...` })
+        }
+        const branch = await Branch.findOneAndUpdate({ _id: branch_id }, { location }, { new: true, runValidators: true })
+        if (!branch) {
+            return res.status(500).json({ err: `Error... Unable to make changes` })
+        }
+        return res.status(200).json({ msg: `Branch location changed successfully...`, newBranchInfo: branch })
+    } else {
+        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to make this change!!!` })
+    }
 })
 const getAllBranch = asyncHandler(async(req, res) => {
-    if (req.info.id.role === 'CEO') {
-        const branch = await Branch.find({})
+    if (req.info.id.role === 'CEO' || req.info.id.role === 'BRANCH MANAGER') {
+        const branch = await Branch.find({}).populate("branchManager storeManager salesPerson", "name email phone")
         res.status(StatusCodes.OK).json({ nbHit: branch.length, allBranch: branch })
     } else {
-        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Not authorized to perform such operation` })
+        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
 })
 const deleteBranch = asyncHandler(async(req, res) => {
@@ -147,4 +154,4 @@ const deleteBranch = asyncHandler(async(req, res) => {
     res.status(StatusCodes.OK).json({ msg: `${branch.location} branch deleted successfully.` })
 })
 
-module.exports = { createBranch, updateBranchInfo, deleteBranch, getAllBranch, addBranchStaffs }
+module.exports = { createBranch, changeBranchLocation, deleteBranch, getAllBranch, addBranchStaffs }

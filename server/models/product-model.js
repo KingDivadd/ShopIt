@@ -7,7 +7,7 @@ const productSchema = new mongoose.Schema({
     quantity: { type: Number, trim: true, default: 0 },
     productPic: { type: String, trim: true, default: 'http://produc-image' },
     productAdder: { type: mongoose.Types.ObjectId, ref: "User", required: true },
-    productBranch: { type: String, trim: true, required: true },
+    productBranch: { type: mongoose.Types.ObjectId, ref: "Branch", required: true },
     unit: { type: String, enum: ["ctn(s)", "bag(s)", "keg(s)", "pack(s)", "pcs", "bottle(s)"] }
 }, { timestamps: true })
 

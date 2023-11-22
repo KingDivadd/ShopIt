@@ -3,7 +3,7 @@ const mongoose = require('mongoose')
 const { StatusCodes } = require('http-status-codes')
 const User = require("../models/user-model")
 const Branch = require("../models/branch-model")
-
+const Product = require("../models/product-model")
 
 // only the CEO can create branch. and on creation only the location is required, the rest can be filled later.
 const createBranch = asyncHandler(async(req, res) => {
@@ -52,6 +52,11 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
             if (isBM.role !== 'BRANCH MANAGER') {
                 return res.status(500).json({ err: `Error... Selected user's role for BM's position is not branch manager!!!` })
             }
+            // now let's check if he's not the branchManger for another branch
+            const branch = await Branch.findOne({ branchManager: { $eq: branchManager } })
+            if (branch) {
+                return res.status(500).json({ err: `Error... Selected user is aleady the BM of ${branch.location} branch!!!` })
+            }
             update.branchManager = branchManager.trim()
             await User.findOneAndUpdate({ _id: branchManager }, { branch: branch_id }, { new: true, runValidators: true })
         }
@@ -95,7 +100,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
         }
         if (salesPerson.trim() === null) {
             update.salesPerson = null
-            await User.findOneAndUpdate({ _id: salesPerson }, { branch: null }, { new: true, runValidators: true })
+            await User.findOneAndUpdate({ _id: salesPerson }, { branch: null }, { new: true, runValidators: true }).populate("branchManager", "name")
         }
     } else {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to make these changes!!!` })
@@ -135,23 +140,7 @@ const getAllBranch = asyncHandler(async(req, res) => {
     }
 })
 const deleteBranch = asyncHandler(async(req, res) => {
-    const { branch_id } = req.body
-    if (req.info.id.role !== "CEO") {
-        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Not authorized to perform such operation!!!` })
-    }
-    // first we have to remove all occurance of that branch
-
-    // first we romove branch Id from all users
-    const result = await User.updateMany({ branch: branch_id }, { branch: null }, { new: true, runValidators: true })
-
-    if (!result) {
-        return res.status(500).json({ err: `Error... Something went wrong!!!` })
-    }
-    const branch = await Branch.findOneAndDelete({ _id: branch_id })
-    if (!branch) {
-        res.status(500).json({ err: `Error... Unable to delete selected Branch` })
-    }
-    res.status(StatusCodes.OK).json({ msg: `${branch.location} branch deleted successfully.` })
+    return res.json({ msg: `Kindly bear with us we are working on it!!!` })
 })
 
 module.exports = { createBranch, changeBranchLocation, deleteBranch, getAllBranch, addBranchStaffs }

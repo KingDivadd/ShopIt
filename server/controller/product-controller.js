@@ -6,13 +6,18 @@ const Branch = require("../models/branch-model")
 
 
 const allProducts = asyncHandler(async(req, res) => {
-
+    const { location } = req.body
     if (req.info.id.role === 'CEO') {
+        const locationExist = await Branch.findOne({ location })
+        if (locationExist) {
+            const product = await Product.find({ productBranch: locationExist._id }).populate("productBranch", "location")
+            return res.status(200).json({ msg: `${location} branch`, nbProducts: product.length, products: product })
+        }
         const allProducts = await Product.find({}).populate("productBranch", "location")
         if (!allProducts) {
             return res.status(500).json({ err: `Error... Unable to fetch product data!!!` })
         }
-        return res.status(StatusCodes.OK).json({ nbProducts: allProducts.length, products: allProducts })
+        return res.status(StatusCodes.OK).json({ msg: `All product`, nbProducts: allProducts.length, products: allProducts })
     }
 
     const user = await User.findOne({ _id: req.info.id.id })
@@ -39,40 +44,41 @@ const allProducts = asyncHandler(async(req, res) => {
 })
 
 const newProduct = asyncHandler(async(req, res) => {
-    const { productName, price, productPic, unit, productBranch, quantity } = req.body
-    if (!productName || !price || !unit || !productBranch) {
+    const { productName, prodPrice, unit, branch_id, prodQuantity } = req.body
+    if (!productName || !prodPrice || !unit || !branch_id || !prodQuantity) {
         return res.status(500).json({ err: `Please provide all product related informations!!!` })
     }
 
     const user = await User.findOne({ _id: req.info.id.id })
 
-    const branchExist = await Branch.findOne({ _id: productBranch })
+    const branchExist = await Branch.findOne({ _id: branch_id })
     if (!branchExist) {
         return res.status(500).json({ err: `Error... Product cannot be added to an unregisted business branch!!!` })
     }
 
-    if (req.info.id.role === "CEO" || (branchExist.branchManager && String(user.branch) === productBranch)) {
+    if (req.info.id.role === "CEO" || (branchExist.branchManager && String(user.branch) === branch_id)) {
+
+        // let's check if their's a product with the same name in the db
+        const products = await Product.find({ productBranch: branch_id, productName: productName })
+        if (products.length) {
+            const quantity = Number(products[0].quantity.replace(/,/g, '')) + Number(prodQuantity.replace(/,/g, ''))
+            const totalCost = quantity * Number(products[0].price.replace(/,/g, ''))
+
+            const updateProduct = await Product.findOneAndUpdate({ _id: products[0]._id }, { quantity: quantity.toLocaleString(), totalCost: totalCost.toLocaleString() }, { new: true, runValidators: true })
+
+            return res.status(200).json({ msg: `Adding ${prodQuantity} ${unit} to existing amont of ${productName} in ${branchExist.location} branch`, product: updateProduct })
+        }
+
+        const totalCost = Number(prodPrice) * Number(prodQuantity)
+        req.body.productBranch = branch_id
         req.body.productAdder = req.info.id.id
-        req.body.totalCost = quantity * price
-            // check if product with same name exist, if yes add the new quantity to it
-        const productExist = await Product.findOne({ productBranch: { $eq: productBranch } })
-
-        if (productExist) {
-            const newQty = Number(productExist.quantity) + Number(quantity)
-            const updateProduct = await Product.findOneAndUpdate({ _id: productExist._id }, { quantity: newQty }, { new: true, runValidators: true }).populate('productBranch', 'location')
-
-            return res.status(StatusCodes.OK).json({ msg: `${productName} added successfully`, productInfo: updateProduct })
-        }
-
-        // but if it doesn't exist
-        const product = await Product.create(req.body)
-        if (!product) {
-            return res.status(500).json({ err: `Product creation failed!!!` })
-        }
-        // now we have to add thesame product to the branch
-        await Branch.findOneAndUpdate({ _id: productBranch }, { $push: { productList: product._id } }, { new: true, runValidators: true }).populate('productBranch', 'location')
-
-        return res.status(StatusCodes.OK).json({ msg: `${productName} added successfully`, productInfo: product })
+        req.body.price = Number(prodPrice).toLocaleString()
+        req.body.quantity = Number(prodQuantity).toLocaleString()
+        req.body.totalCost = totalCost.toLocaleString()
+        const newProduct = await Product.create(req.body)
+            // add the new product to the branch
+        const productBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $push: { productList: newProduct } }, { new: true, runValidators: true })
+        return res.status(200).json({ msg: `New Product Added to ${branchExist.location} branch`, product: newProduct })
     } else {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `${req.info.id.name}, you're not authorized to perform this operation` })
     }
@@ -101,18 +107,19 @@ const updateProductInfo = asyncHandler(async(req, res) => {
         }
 
         if (price.trim() !== '') {
-            update.price = price.trim()
+
+            update.price = Number(price.trim()).toLocaleString()
         }
 
         if (quantity.trim() !== '') {
-            update.quantity = quantity.trim()
+            update.quantity = Number(quantity.trim()).toLocaleString()
         }
 
         const newProduct = await Product.findOneAndUpdate({ _id: product_id }, { $set: update }, { new: true, runValidators: true })
 
-        const totalCost = Number(newProduct.price) * Number(newProduct.quantity)
+        const totalCost = Number(newProduct.price.replace(/,/g, '')) * Number(newProduct.quantity.replace(/,/g, ''))
 
-        const updateProduct = await Product.findOneAndUpdate({ _id: product_id }, { totalCost }, { new: true, runValidators: true })
+        const updateProduct = await Product.findOneAndUpdate({ _id: product_id }, { totalCost: totalCost.toLocaleString() }, { new: true, runValidators: true })
         if (!updateProduct) {
             res.status(500).json({ err: `Error, unable to update product info. contact your developers!!!` })
         }
@@ -123,68 +130,71 @@ const updateProductInfo = asyncHandler(async(req, res) => {
 })
 
 const transferProduct = asyncHandler(async(req, res) => {
-    const { product_id, oldBranch, newBranch, quantity } = req.body
-    if (req.info.role !== "CEO") {
-        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're unathorized to perform this operation` })
+    const { old_branch, productName, quantity, new_branch } = req.body
+    if (req.info.id.role !== 'CEO') {
+        return res.status(401).json({ err: `Error... ${req.info.name} you're not authorized to transfer product to another branch!!!` })
     }
-    // check if the old branch exist
-    const oldBranchExist = await Branch.findOne({ location: oldBranch })
-    if (!oldBranchExist) {
-        res.status(StatusCodes.NOT_FOUND).json({ err: `Cannot tranfer product from an unregistered branch` })
+
+    if (!old_branch || !productName || !quantity || !new_branch) {
+        return res.status(500).json({ err: `Error... Please provide required information for product transfer!!!` })
     }
-    // new fetch the productList
-    let productList = oldBranchExist.productList
-    if (!productList.includes(product_id)) {
-        res.status(StatusCodes.NOT_FOUND).json({ err: `Selected product does not exist in the branch` })
+    if (old_branch === new_branch) {
+        return res.status(500).json({ err: `Error... You cannot transfer goods between the same branch!!!` })
     }
-    let product = productList(productList.indexOf(product_id))
-        // the product above is in form of an ID
-        // new we will pupulate the product to get the rem. qty
-    const fetchProduct = await Product.findOne({ _id: product })
-    if (!fetchProduct) {
-        res.status(StatusCodes.NOT_FOUND).json({ err: `Error fetching product` })
+
+    const old_branchExist = await Branch.findOne({ _id: old_branch }).populate("productList", "productName")
+    if (!old_branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID ${old_branch} not found!!!` })
     }
-    // new we subtrach
-    if (fetchProduct.quantity < quantity) {
-        res.status(500).json({ err: `Error... insufficient product` })
-    }
-    let oldBranchProductQty = fetchProduct.quantity - quantity
-    productList(productList.indexOf(product_id)) = oldBranchProductQty
-    const updateOldBranch = await Branch.findOneAndUpdate({ location: oldBranch }, { productList }, { new: true, runValidators: true })
-    if (!updateOldBranch) {
-        res.status(500).json({ err: `Error... Could not update the old branch with new prudct quantity!!!` })
-    }
-    // now in the new branch, 1. we first check if it exist. 2. we then check if there's a product with similar name (if yes we add to it, and if no, we create a new one)
-    const newBranchExist = await Branch.findOne({ location: newBranch })
-    if (!newBranchExist) {
-        res.status(StatusCodes.NOT_FOUND).json({ err: `Secondary branch does not exist. Create the branch before atempting to transfer product` })
-    }
-    // new fetch productList
-    let newProductList = newBranchExist.productList
-        // newProductList is a list of IDs, how do i check if anyone has the same name
-        // perharps I will loop through the list running the and making a get request,
-    const den = []
-    newProductList.forEach(async id => {
-        let product = await Product.findOne({ _id: id })
-        if (product.productName === fetchProduct.productName) {
-            den.push(id)
+    const productList = old_branchExist.productList
+    let index = null
+    const old_branch_info = {}
+    productList.forEach((data, ind) => {
+        if (data.productName === productName) {
+            index = ind
         }
     });
-    if (den.length === 0) {
-        console.log('the product does not exit in the new branch so we will have to create it');
-        const newProduct = await Product.create({ productName: fetchProduct.productName, price: fetchProduct.price, quantity: quantity, totalCost: price * quantity, productAdder: req.info.id, productBranch: newBranch })
-        if (!newProduct) {
-            res.status(500).json({ err: `Product transfer to ${newBranch} failed!!!` })
-        }
-        res.status(StatusCodes.OK).json({ msg: `${newProduct.productName} transfered to ${newBranch} successfully...` })
+    if (index === null) {
+        return res.status(404).json({ err: `Error... ${productName} isn't available in ${old_branchExist.location} branch!!!` })
     }
-    // if den.length = 1 i.e product already exist in the branch
+    const product = await Product.findOne({ _id: productList[index]._id })
+    if (Number(product.quantity.replace(/,/g, '')) < Number(quantity)) {
+        return res.status(500).json({ err: `Error... Insufficient product... restock ${productName} in ${old_branchExist.location} branch!!!` })
+    }
+    const old_quantity = Number(product.quantity.replace(/,/g, '')) - Number(quantity)
+    const totalCost = old_quantity * Number(product.price.replace(/,/g, ''))
+    old_branch_info.quantity = old_quantity.toLocaleString()
+    old_branch_info.totalCost = totalCost.toLocaleString()
 
-    const oldProduct = await Product.findOneAndUpdate({ _id: den[0] }, { quantity: quantity, totalCost: price * quantity }, { new: true, runValidators: true })
-    if (!oldProduct) {
-        res.status(500).json({ err: `Error... unable to update ${oldProduct.productName} in ${newBranch}` })
+    const update_old_product = await Product.findOneAndUpdate({ _id: product._id }, { $set: old_branch_info }, { new: true, runValidators: true }).select("productName price quantity totalCost productBranch").populate("productBranch", "location")
+
+    let new_index = null
+    const new_branch_info = {}
+    const new_branchExist = await Branch.findOne({ _id: new_branch }).populate("productList", "productName")
+    if (!new_branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID ${new_branch} not found!!!` })
     }
-    res.status(StatusCodes.OK).json({ msg: `${quantity} ${oldProduct.unit} of ${oldProduct.productName} has been transfered from ${oldBranch} to ${newBranch}` })
+    const new_productList = new_branchExist.productList
+    new_productList.forEach((data, ind) => {
+        if (data.productName === productName) {
+            new_index = ind
+        }
+    });
+    if (new_index === null) {
+        return res.status(404).json({ err: `Error... ${productName} isn't present in ${new_branchExist.location} branch` })
+            // here we will create a new product in the branch
+    }
+    // here we will add to it
+    const new_product = await Product.findOne({ _id: new_productList[new_index]._id }).populate("productBranch", "location")
+    const new_quantity = Number(new_product.quantity.replace(/,/g, '')) + Number(quantity)
+    const new_totalCost = new_quantity * Number(new_product.price.replace(/,/g, ''))
+    new_branch_info.quantity = new_quantity.toLocaleString()
+    new_branch_info.totalCost = new_totalCost.toLocaleString()
+
+    const update_new_product = await Product.findOneAndUpdate({ _id: new_product._id }, { $set: new_branch_info }, { new: true, runValidators: true }).select("productName price quantity totalCost productBranch").populate("productBranch", "location")
+
+
+    res.status(200).json({ msg: `${quantity} ${product.unit} of ${productName} has been transfered from ${old_branchExist.location} to ${new_branchExist.location} branch successfully`, oldProductInfo: update_old_product, newBranchNewInfo: update_new_product })
 })
 
 const deleteProduct = asyncHandler(async(req, res) => {
@@ -202,7 +212,7 @@ const deleteProduct = asyncHandler(async(req, res) => {
         return res.status(401).json({ err: `Error... You're not authorized to delete product` })
     }
 
-    console.log(productExist.productBranch)
+
     if (productExist.productBranch === null) {
         const removeProduct = await Product.findOneAndDelete({ _id: product_id })
         return res.status(StatusCodes.OK).json({ msg: `Product deleted successfully`, deletedProduct: removeProduct })
@@ -210,7 +220,7 @@ const deleteProduct = asyncHandler(async(req, res) => {
     }
 
     if (req.info.id.role === "CEO" || (req.info.id.role === "BRANCH MANAGER" && String(user.branch) === productExist.productBranch)) {
-        const removeProduct = await Product.findOneAndDelete({ _id: product_id })
+        const removeProduct = await Product.findOneAndDelete({ _id: product_id }).select("productName quantity unit")
         if (!removeProduct) {
             return res.status(500).json({ err: `Error... Unable to detele ${productExist.productName}!!!` })
         }

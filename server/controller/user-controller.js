@@ -16,10 +16,22 @@ const allUsers = asyncHandler(async(req, res) => {
     res.status(StatusCodes.OK).json({ nbHit: users.length, users: users })
 })
 
-const everyUsers = asyncHandler(async(req, res) => {
-    const users = await User.find({})
-    if (!users) {
-        return res.status(500).json({ err: `Error... Unable to fetch users!!!` })
+const filterUser = asyncHandler(async(req, res) => {
+    const { name, branch, role } = req.body
+    const query = {}
+    if (name) {
+        query.name = { $regex: new RegExp(name, 'i') };
+    }
+    if (branch) {
+        query.branch = { $regex: new RegExp(branch, 'i') };
+    }
+    if (role) {
+        query.role = { $regex: new RegExp(role, 'i') };
+    }
+
+    const users = await User.find(query)
+    if (!users.length) {
+        return res.status(500).json({ err: `Error... No matching users found!!!` })
     }
     res.status(StatusCodes.OK).json({ nbHit: users.length, users: users })
 })
@@ -42,6 +54,19 @@ const findUser = asyncHandler(async(req, res) => {
     const findUser = await User.find(keyword).find({ _id: { $ne: req.info.id.id } })
     res.status(StatusCodes.OK).json({ nbHit: findUser.length, findUser })
 
+})
+
+const deBranchUser = asyncHandler(async(req, res) => {
+    const { user_id } = req.body
+    const userExist = await User.findOne({ _id: user_id })
+    if (!userExist) {
+        return res.status(404).json({ err: `Error... User with ID ${user_id} not found!!!` })
+    }
+    if (req.info.id.role !== 'CEO') {
+        return res.status(401).json({ err: `Error... ${req.info.id.name} you're not authorized to de-branch user!!` })
+    }
+    const updateUser = await User.findOneAndUpdate({ _id: user_id }, { branch: null }, { new: true, runValidators: true })
+    return res.status(200).json({ msg: `${updateUser.name} has been successfully removed from his branch...`, newUserInfo: updateUser })
 })
 
 const updateUserInfo = asyncHandler(async(req, res) => {
@@ -187,4 +212,4 @@ const removeUser = asyncHandler(async(req, res) => {
     res.status(StatusCodes.OK).json({ msg: ` has been removed from the app`, deletedUser: deleteUser })
 })
 
-module.exports = { allUsers, oneUser, updateUserInfo, removeUser, findUser, everyUsers }
+module.exports = { allUsers, oneUser, updateUserInfo, removeUser, findUser, filterUser, deBranchUser }

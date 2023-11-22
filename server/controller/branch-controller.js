@@ -7,26 +7,26 @@ const Product = require("../models/product-model")
 
 // only the CEO can create branch. and on creation only the location is required, the rest can be filled later.
 const createBranch = asyncHandler(async(req, res) => {
-    const { location, branchManager, storeManager, salesPerson, } = req.body
-    if (req.info.id.role === "CEO") {
-        if (!location) {
-            res.status(StatusCodes.BAD_REQUEST).json({ err: `Please provide location for the Branch` })
-        }
-        // now make sure location does not exist before
-        const locationExist = await Branch.findOne({ location })
-        if (locationExist) {
-            res.status(500).json({ err: `Branch already exist.` })
-        } else {
-
-            const newBranch = await Branch.create(req.body)
-            if (!newBranch) {
-                res.status(500).json({ err: `Error creating a new branch!!!` })
-            }
-            res.status(StatusCodes.OK).json({ msg: `New Branch created`, branchInfo: newBranch })
-        }
-    } else {
-        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... NOT AUTHORIZED to perform such operaton` })
+    const { location } = req.body
+    if (req.info.id.role !== "CEO") {
+        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... ${req.info.id.name} You're not authorized to create a branch!!!` })
     }
+    if (!location) {
+        return res.status(StatusCodes.BAD_REQUEST).json({ err: `Error... Please provide the location for the nerw Branch!!!` })
+    }
+    // now make sure location does not exist before
+    const locationExist = await Branch.findOne({ location: location.trim() })
+    if (locationExist) {
+        return res.status(500).json({ err: `Error... Branch with the name '${location}' already exist!!!` })
+    }
+
+    const newBranch = await Branch.create(req.body)
+    if (!newBranch) {
+        return res.status(500).json({ err: `Error creating a new branch!!!` })
+    }
+    return res.status(StatusCodes.OK).json({ msg: `New Branch created`, branchInfo: newBranch })
+
+
 })
 
 // add branch staffs 
@@ -35,13 +35,11 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
     if (req.info.id.role !== 'CEO' && req.info.id.role !== 'BRANCH MANAGER') {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
-    // check if branch exist
     const branchExist = await Branch.findOne({ _id: branch_id })
     if (!branchExist) {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
     }
     const update = {}
-        // only the CEO or business owner can change the branchManager
     if (req.info.id.role === 'CEO') {
         if (branchManager.trim() !== '') {
             // ensure that his role is a store manager
@@ -53,60 +51,69 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
                 return res.status(500).json({ err: `Error... Selected user's role for BM's position is not branch manager!!!` })
             }
             // now let's check if he's not the branchManger for another branch
-            const branch = await Branch.findOne({ branchManager: { $eq: branchManager } })
-            if (branch) {
-                return res.status(500).json({ err: `Error... Selected user is aleady the BM of ${branch.location} branch!!!` })
+            const branch = await Branch.find({ branchManager: { $eq: branchManager } })
+            if (branch.length) {
+                const branchInfo = branch[0].location
+                return res.status(500).json({ err: `Error... ${isBM.name} is already assigned to ${branchInfo} branch as the branch manager!!!` })
+            }
+            // now ensure another BM doesn't displaces the current BM
+            if (branchExist.branchManager) {
+                return res.status(500).json({ err: `Error... ${branchExist.location} branch already has a branch manager!!!` })
             }
             update.branchManager = branchManager.trim()
             await User.findOneAndUpdate({ _id: branchManager }, { branch: branch_id }, { new: true, runValidators: true })
-        }
-        if (branchManager.trim() === null) {
-            update.branchManager = null
-            await User.findOneAndUpdate({ _id: branchManager }, { branch: null }, { new: true, runValidators: true })
         }
     }
 
     // also ensure the branch manager can only make changes to his branch
     const bmAccess = await User.findOne({ _id: req.info.id.id })
     if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && bmAccess.branch.toString() === branch_id)) {
-
-
         if (storeManager.trim() !== '') {
             const isSM = await User.findOne({ _id: storeManager })
             if (!isSM) {
                 return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... user not found!!!` })
             }
             if (isSM.role !== 'STORE MANAGER') {
-                return res.status(500).json({ err: `Error... Selected user's role for store manager's positon is not a store manager!!!` })
+                return res.status(500).json({ err: `Error... Selected user's role for SM's position in ${branchExist.location} branch is not store manager!!!` })
+            }
+            // now let's check if he's not the storeManger for another branch
+            const branch = await Branch.find({ storeManager: { $eq: storeManager } })
+            if (branch.length) {
+                const branchInfo = branch[0].location
+                return res.status(500).json({ err: `Error... ${isSM.name} is already assigned to ${branchInfo} branch as the store manager!!!` })
+            }
+            // now ensure another SM doesn't displaces the current SM
+            if (branchExist.storeManager) {
+                return res.status(500).json({ err: `Error... ${branchExist.location} branch already has a store manager!!!` })
             }
             update.storeManager = storeManager.trim()
             await User.findOneAndUpdate({ _id: storeManager }, { branch: branch_id }, { new: true, runValidators: true })
         }
-        if (storeManager.trim() === null) {
-            update.storeManager = null
-            await User.findOneAndUpdate({ _id: storeManager }, { branch: null }, { new: true, runValidators: true })
-        }
 
         if (salesPerson.trim() !== '') {
-            const isSp = await User.findOne({ _id: salesPerson })
-            if (!isSp) {
+            const isSM = await User.findOne({ _id: salesPerson })
+            if (!isSM) {
                 return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... user not found!!!` })
             }
-            if (isSp.role !== 'SALES PERSON') {
-                return res.status(500).json({ err: `Error... Selected user's role for sales position is not a sales person!!!` })
+            if (isSM.role !== 'SALES PERSON') {
+                return res.status(500).json({ err: `Error... Selected user's role for SP's position in ${branchExist.location} branch is not sales person!!!` })
+            }
+            // now let's check if he's not the salesPerson for another branch
+            const branch = await Branch.find({ salesPerson: { $eq: salesPerson } })
+            if (branch.length) {
+                const branchInfo = branch[0].location
+                return res.status(500).json({ err: `Error... ${isSM.name} is already assigned to ${branchInfo} branch as the sales person!!!` })
+            }
+            // now ensure another SM doesn't displaces the current SM
+            if (branchExist.salesPerson) {
+                return res.status(500).json({ err: `Error... ${branchExist.location} branch already has a sales person!!!` })
             }
             update.salesPerson = salesPerson.trim()
             await User.findOneAndUpdate({ _id: salesPerson }, { branch: branch_id }, { new: true, runValidators: true })
         }
-        if (salesPerson.trim() === null) {
-            update.salesPerson = null
-            await User.findOneAndUpdate({ _id: salesPerson }, { branch: null }, { new: true, runValidators: true }).populate("branchManager", "name")
-        }
-    } else {
-        return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to make these changes!!!` })
     }
 
-    const updateBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $set: update }, { new: true, runValidators: true })
+    const updateBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $set: update }, { new: true, runValidators: true }).populate("branchManager storeManager salesPerson", "name")
 
     res.status(StatusCodes.OK).json({ msg: `Staff(s) added to ${updateBranch.location} branch successfully...`, branchInfo: updateBranch })
 
@@ -133,14 +140,35 @@ const changeBranchLocation = asyncHandler(async(req, res) => {
 })
 const getAllBranch = asyncHandler(async(req, res) => {
     if (req.info.id.role === 'CEO' || req.info.id.role === 'BRANCH MANAGER') {
-        const branch = await Branch.find({}).populate("branchManager storeManager salesPerson", "name email phone")
+        const branch = await Branch.find({}).populate("branchManager storeManager salesPerson", "name")
         res.status(StatusCodes.OK).json({ nbHit: branch.length, allBranch: branch })
     } else {
         res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
 })
 const deleteBranch = asyncHandler(async(req, res) => {
-    return res.json({ msg: `Kindly bear with us we are working on it!!!` })
+    const { branch_id } = req.body
+    if (req.info.id.role !== 'CEO') {
+        return res.status(401).json({ err: `Error... ${req.info.id.id} you're not authorized to delete any branch!!!` })
+    }
+    const branchExist = await Branch.findOne({ _id: branch_id })
+    if (!branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID '${branch_id}' not found!!!` })
+    }
+    // first all users who is linked to this branch will have it's id replaced by null
+    await User.updateMany({ branch: branch_id }, { branch: null }, { new: true, runValidators: true })
+        // delete all product in the branch
+
+    // delete all invoice in the branch
+
+    // delete all orderList in the branch
+
+    // delete all daily account in the branch
+
+    const delBranch = await Branch.findOneAndDelete({ _id: branch_id })
+    return res.status(200).json({ msg: `${delBranch.location} branch has been deleted successfully` })
+        // return res.json({ msg: `Kindly bear with us we are working on it!!!` })
+
 })
 
 module.exports = { createBranch, changeBranchLocation, deleteBranch, getAllBranch, addBranchStaffs }

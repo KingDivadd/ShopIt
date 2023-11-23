@@ -4,56 +4,7 @@ const Branch = require("../models/branch-model")
 const Product = require("../models/product-model")
 const Invoice = require("../models/invoice-model")
 const User = require("../models/user-model")
-const InvoiceItem = require("../models/invoice-item-model")
 
-
-const newOfflineSale = asyncHandler(async(req, res) => {
-    const { branch_id, productName, quantity } = req.body
-
-    if (!branch_id || !productName || !quantity) {
-        return res.status(500).json({ err: `Error... Please provide all necessary info to make a sale!!!` })
-    }
-    const seller = await User.findOne({ _id: req.info.id.id })
-    const branchExist = await Branch.findOne({ _id: branch_id })
-    if (!branchExist) {
-        return res.status(404).json({ err: `Error... Branch with ID of ${branch_id} is not a registered branch!!!` })
-    }
-
-    if (req.info.id.role !== 'CEO' && !(req.info.id.role === 'BRANCH MANAGER' || seller.branch === branch_id)) {
-        return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to make sales in ${branchExist.location} branch` })
-    }
-
-    const productExist = await Product.findOne({ productBranch: branch_id, productName: productName })
-    if (!productExist) {
-        return res.send("product not available in branch")
-    }
-    if (Number(quantity) > Number(productExist.quantity.replace(/,/g, ''))) {
-        return res.status(500).json({ err: `Error... Insufficient product, restock ${productName} in ${branchExist.location}` })
-    }
-    const saleList = {}
-    const newProductInfo = {}
-    saleList.productName = productName
-    saleList.quantity = Number(quantity).toLocaleString()
-    saleList.unitPrice = productExist.price
-    const subTotal = Number(quantity) * Number(productExist.price.replace(/,/g, ''))
-    saleList.subTotal = subTotal.toLocaleString()
-    saleList.addedBy = req.info.id.id
-        // const newInviceItem = await InvoiceItem.create(saleList)
-
-    newProductInfo.productName = productName
-    const quantity_left = Number(productExist.quantity.replace(/,/g, '')) - Number(quantity)
-    newProductInfo.quantity = quantity_left.toLocaleString()
-    newProductInfo.unitPrice = productExist.price
-    const totalCost = Number(productExist.price.replace(/,/g, '')) * Number(quantity_left)
-    newProductInfo.totalCost = totalCost.toLocaleString()
-        // const updatedProduct = await Product.findOneAndUpdate({_id: productExist._id}, {$set: newProductInfo}, {new: true, runValidators: true})
-
-    res.status(200).json({
-        msg: `${quantity} ${productExist.unit} of ${productName} sold successfully...`,
-        newBranchProduct: updatedProduct
-    })
-
-})
 
 const newSale = asyncHandler(async(req, res) => {
     const { branch_id, sale, customer, paymentStatus, paymentMethod, totalPaid } = req.body
@@ -77,7 +28,7 @@ const newSale = asyncHandler(async(req, res) => {
     for (let i = sale.length; i--; i > 0) {
         const productExist = await Product.findOne({ productBranch: branch_id, productName: sale[i].productName })
         if (!productExist) {
-            return res.send(`${sale[i].productName} not found in the branch!!!`)
+            return res.status(404).json({ err: `${sale[i].productName} not found in ${branchExist.location} branch!!!` })
         }
 
         if (Number(sale[i].quantity) > Number(productExist.quantity.replace(/,/g, ''))) {
@@ -86,7 +37,8 @@ const newSale = asyncHandler(async(req, res) => {
 
         const saleList = {}
         saleList.productName = sale[i].productName
-        saleList.quantity = Number(sale[i].quantity).toLocaleString()
+        const qty = Number(sale[i].quantity)
+        saleList.quantity = qty.toLocaleString()
         saleList.unitPrice = productExist.price
         const subTotal = Number(sale[i].quantity) * Number(productExist.price.replace(/,/g, ''))
         saleList.subTotal = subTotal.toLocaleString()
@@ -137,11 +89,20 @@ const newSale = asyncHandler(async(req, res) => {
         // Add the current subTotal to the accumulator
         return accumulator + subTotal;
     }, 0);
-
+    let zero = 0
     if (totalPaid.trim() !== '') {
-        update.totalPaid = Number(totalPaid.trim()).toLocaleString()
-        const sellDue = Number(totalSubTotal) - Number(totalPaid)
-        update.sellDue = sellDue.toLocaleString()
+        if (Number(totalPaid) < Number(totalSubTotal)) {
+            update.totalPaid = Number(totalPaid.trim()).toLocaleString()
+            const sellDue = Number(totalSubTotal) - Number(totalPaid)
+            update.sellDue = sellDue.toLocaleString()
+        } else {
+            update.totalPaid = Number(totalPaid.trim()).toLocaleString()
+            update.sellDue = zero.toLocaleString()
+        }
+    } else {
+
+        update.totalPaid = update.totalAmount
+        update.sellDue = zero.toLocaleString()
     }
     update.totalItems = totalItems.toLocaleString()
     update.addedBy = req.info.id.id
@@ -149,14 +110,168 @@ const newSale = asyncHandler(async(req, res) => {
 
     const newInvoice = await Invoice.create(update)
 
-    return res.send({ msg: `Sales created successfully`, invoice: newInvoice })
-})
-const editSale = asyncHandler(async(req, res) => {
+    const updateCurrentBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $push: { invoiceList: newInvoice._id } }, { new: true, runValidators: true }).select("location invoiceList")
 
+    return res.send({ msg: `Sales created successfully`, invoice: newInvoice, currentBranch: updateCurrentBranch })
+})
+
+const allSaleInvoice = asyncHandler(async(req, res) => {
+    const { branch_id } = req.body
+
+    const userExist = await User.findOne({ _id: req.info.id.id })
+    if (!userExist) {
+        return res.status(404).json({ err: `Error... User with ID ${req.info.id.id} not found!!!` })
+    }
+    const branchExist = await Branch.findOne({ _id: branch_id })
+    if (!branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID of ${branch_id} is not a registered branch!!!` })
+    }
+    if (req.info.id.role !== 'CEO' && String(userExist.branch) !== branch_id) {
+        return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to view sale lists for ${branchExist.location} branch` })
+    }
+
+    const branchInvoice = await Invoice.find({ branch: branch_id }).populate("addedBy", "name")
+
+    if (!branchInvoice.length) {
+        return res.status(404).json({ msg: `${branchExist.location} branch has no recorded invoices yet!!!` })
+    }
+    return res.status(200).json({ branch: branchExist.location, nbInvoices: branchInvoice.length, invoices: branchInvoice })
+})
+
+const editSaleInvoice = asyncHandler(async(req, res) => {
+    const { branch_id, invoice_id, sale, customer, paymentStatus, paymentMethod, totalPaid } = req.body
+
+    if (!branch_id || !invoice_id) {
+        return res.status(500).json({ err: `Error... Provide banch and invoice IDs!!!` })
+    }
+
+    const user = await User.findOne({ _id: req.info.id.id })
+    const branchExist = await Branch.findOne({ _id: branch_id })
+    if (!branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID of ${branch_id} was not found!!!` })
+    }
+    const invoiceExist = await Invoice.findOne({ _id: invoice_id, branch: branch_id })
+    if (!invoiceExist) {
+        return res.status(404).json({ err: `Error... Invoice with ID of ${invoice_id} was not found in ${branchExist.location} branch's inventory!!!` })
+    }
+
+    if (req.info.id.role !== 'CEO' && !(req.info.id.role === 'BRANCH MANAGER' || user.branch === branch_id)) {
+        return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to make changes to sales invoice in ${branchExist.location} branch` })
+    }
+
+    const update = {}
+    let saleListBox = []
+    let productLeftBox = []
+    for (let i = sale.length; i--; i > 0) {
+        const productExist = await Product.findOne({ productBranch: branch_id, productName: sale[i].productName })
+        if (!productExist) {
+            return res.status(404).json({ err: `${sale[i].productName} not found in ${branchExist.location} branch's inventory!!!` })
+        }
+
+        if (Number(sale[i].quantity) > Number(productExist.quantity.replace(/,/g, ''))) {
+            return res.status(500).json({ err: `Error... Insufficient product, restock ${sale[i].productName} in ${branchExist.location}` })
+        }
+
+
+        // const saleList = {}
+        // saleList.productName = sale[i].productName
+        // const qty = Number(sale[i].quantity)
+        // saleList.quantity = qty.toLocaleString()
+        // saleList.unitPrice = productExist.price
+        // const subTotal = Number(sale[i].quantity) * Number(productExist.price.replace(/,/g, ''))
+        // saleList.subTotal = subTotal.toLocaleString()
+        // saleList.addedBy = req.info.id.id
+
+        // const newProductInfo = {}
+        // newProductInfo.productName = sale[i].productName
+        // const quantity_left = Number(productExist.quantity.replace(/,/g, '')) - Number(sale[i].quantity)
+        // newProductInfo.quantity = quantity_left.toLocaleString()
+        // newProductInfo.unitPrice = productExist.price
+        // const totalCost = Number(productExist.price.replace(/,/g, '')) * Number(quantity_left)
+        // newProductInfo.totalCost = totalCost.toLocaleString()
+
+        // saleListBox.push(saleList)
+        // productLeftBox.push(newProductInfo)
+        // await Product.findOneAndUpdate({ _id: productExist._id }, { $set: newProductInfo }, { new: true, runValidators: true })
+    }
+
+
+    if (branch_id.trim() !== '') {
+        update.branch = branch_id.trim()
+    }
+    if (customer.trim() !== '') {
+        update.customer = customer.trim()
+    } else { update.customer = 'Walk-In Customer' }
+
+    if (paymentStatus.trim() !== '') {
+        update.paymentStatus = paymentStatus.trim()
+    }
+    if (paymentMethod.trim() !== '') {
+        update.paymentMethod = paymentMethod.trim()
+    }
+
+    const totalSubTotal = saleListBox.reduce((accumulator, item) => {
+        // Remove commas and convert to a number
+        const subTotal = Number(item.subTotal.replace(/,/g, ''));
+
+        // Add the current subTotal to the accumulator
+        return accumulator + subTotal;
+    }, 0);
+
+    update.totalAmount = totalSubTotal.toLocaleString()
+
+    const totalItems = saleListBox.reduce((accumulator, item) => {
+        // Remove commas and convert to a number
+        const subTotal = Number(item.quantity.replace(/,/g, ''));
+
+        // Add the current subTotal to the accumulator
+        return accumulator + subTotal;
+    }, 0);
+    let zero = 0
+    if (totalPaid.trim() !== '') {
+        if (Number(totalPaid) < Number(totalSubTotal)) {
+            update.totalPaid = Number(totalPaid.trim()).toLocaleString()
+            const sellDue = Number(totalSubTotal) - Number(totalPaid)
+            update.sellDue = sellDue.toLocaleString()
+        } else {
+            update.totalPaid = Number(totalPaid.trim()).toLocaleString()
+            update.sellDue = zero.toLocaleString()
+        }
+    } else {
+
+        update.totalPaid = update.totalAmount
+        update.sellDue = zero.toLocaleString()
+    }
+    update.totalItems = totalItems.toLocaleString()
+    update.addedBy = req.info.id.id
+    update.invoiceItems = saleListBox.reverse()
+
+    // const updateInvoice = await Invoice.findOneAndUpdate({ _id: invoice_id }, { $set: update }, { new: true, runValidators: true })
+
+    // return res.status(200).json({ msg: `Invoice with ID ${invoice_id} updated successfully`, updatedInvoice: updateInvoice })
 })
 
 const deleteInvoice = asyncHandler(async(req, res) => {
+    const { branch_id, invoice_id } = req.body
+    if (req.info.id.role !== 'CEO') {
+        return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to delete any invoice!!!` })
+    }
+    const branchExist = await Branch.findOne({ _id: branch_id })
+    if (!branchExist) {
+        return res.status(404).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
+    }
+    const invoiceExist = await Invoice.findOne({ _id: invoice_id, branch: branch_id })
+    if (!invoiceExist) {
+        return res.status(404).json({ err: `Error... Invoice with ID ${invoice_id} not found in ${branchExist.location} branch's inventory` })
+    }
+
+    // we remove any traces of the invoice id
+    const unLinkBranch = await Branch.findOneAndUpdate({ _id: branch_id }, { $pull: { invoiceList: invoice_id } }, { new: true, runValidators: true }).select("location invoiceList")
+
+    const delInvoice = await Invoice.findOneAndDelete({ _id: invoice_id })
+    return res.status(200).json({ msg: `Invoice with ID ${invoice_id} has been deleted from ${branchExist.location} branch successfully!!!`, newBranchInfo: unLinkBranch })
+
 
 })
 
-module.exports = { newOfflineSale, newSale, editSale, deleteInvoice }
+module.exports = { newSale, editSaleInvoice, deleteInvoice, allSaleInvoice }

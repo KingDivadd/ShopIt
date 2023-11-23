@@ -25,7 +25,7 @@
          ## Required Info
          1. email 2. password (this will be the new password)
 
-   2. User
+   2. User Schema
 
       1. Get all users [ GET request ]=> /api/user/all-users
          ## Required info
@@ -51,23 +51,9 @@
          1. Bearer token for authorization [so that only user logged in as ''vehicle_coordinator' can perform operation]
          2. assignee_id [we are woking on the assumption that only a driver is assigned to an assignee]
 
-   3. vehicle Schema
+   3. Branch Schema
 
-      1. Add a new Vehicle [POST request] => /api/vehicle/add-vehicle
-         ## Required Info
-         1. plate_no, 2. engine_no, 3. vehicle_type ['bus', 'car'], 4. brand, 5. current_millage
-         2. Bearer token for authorization [so that only user logged in as 'vehicle_coordinator' can perform the vehicle adding operation]
-      2. Get all vehicles [GET request] => /api/vehicle/all-vehicles/
-         ## Required Info
-         1. Bearer token
-      3. Admin Update Vehicle Info [PATCH request] => /api/admin-update-vehicle-info
-         ## Required Info
-         1. Bearer token for authorization [so that only user logged in as 'vehicle_coordinator' can perform the vehicle adding operation]
-         2. 1. vehicle_id, 2. brand, 3. plate_no, 4. vehicle_type, 5. current_millage, 6. engine_no, current_state, department
-      4. Update Vehicle Info [PATCH request] => /api/update-vehicle-info
-         ## Required Info
-         1. Bearer token for authorization [to ensure only logged in users and their drivers (if any) can make changes to the vehicle assiged to them (loggedInUser)]
-         2. ##### work in progress
+   4. Product Schema
 
 3. Data Formats:
 

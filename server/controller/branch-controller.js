@@ -139,12 +139,31 @@ const changeBranchLocation = asyncHandler(async(req, res) => {
     }
 })
 const getAllBranch = asyncHandler(async(req, res) => {
+    const { branch_id, location } = req.body
+
     if (req.info.id.role === 'CEO' || req.info.id.role === 'BRANCH MANAGER') {
-        const branch = await Branch.find({}).populate("branchManager storeManager salesPerson", "name")
-        res.status(StatusCodes.OK).json({ nbHit: branch.length, allBranch: branch })
+        const query = {};
+        if (branch_id) {
+            query._id = branch_id;
+        }
+
+        if (location) {
+            query.location = location;
+        }
+
+        const branches = await Branch.find(query).populate("branchManager storeManager salesPerson", "name");
+
+        if (!branches.length) {
+            return res.status(404).json({ err: `Error... No store branches found with provided criteria.` });
+        }
+
+        res.status(StatusCodes.OK).json({ nbHit: branches.length, allBranch: branches });
+
+
     } else {
         res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
+
 })
 const deleteBranch = asyncHandler(async(req, res) => {
     const { branch_id } = req.body

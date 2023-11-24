@@ -4,6 +4,7 @@ const connectDB = require('./config/db')
 require('dotenv').config()
 require('colors')
 const notFoundMiddleware = require('./middleware/not-found-middleware')
+const errorHandlerMiddleware = require('./middleware/error-handler-middlerware')
 const authRoute = require('./routes/auth-route')
 const userRoute = require('./routes/user-route')
 const branchRoute = require("./routes/branch-route")
@@ -23,6 +24,7 @@ app.use('/api/invoice', invoiceRoute)
 
 // Errors
 app.use(notFoundMiddleware)
+app.use(errorHandlerMiddleware)
 
 // run app
 let PORT = process.env.PORT || 5500

@@ -29,7 +29,7 @@ const filterUser = asyncHandler(async(req, res) => {
         query.role = { $regex: new RegExp(role, 'i') };
     }
 
-    const users = await User.find(query)
+    const users = await User.find(query).populate("branch", "location")
     if (!users.length) {
         return res.status(500).json({ err: `Error... No matching users found!!!` })
     }

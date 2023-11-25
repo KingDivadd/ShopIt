@@ -55,8 +55,9 @@ const newProduct = asyncHandler(async(req, res) => {
     if (!branchExist) {
         return res.status(500).json({ err: `Error... Product cannot be added to an unregisted business branch!!!` })
     }
-
-    if (req.info.id.role === "CEO" || (branchExist.branchManager && String(user.branch) === branch_id)) {
+    // the ceo
+    // || (branchExist.branchManager && String(user.branch) === branch_id)
+    if (req.info.id.role === "CEO") {
 
         // let's check if their's a product with the same name in the db
         const products = await Product.find({ productBranch: branch_id, productName: productName })

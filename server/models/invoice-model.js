@@ -5,7 +5,6 @@ const invoiceItemSchema = new mongoose.Schema({
     quantity: { type: String, required: true },
     unitPrice: { type: String, trim: true, required: true },
     subTotal: { type: String, trim: true, required: true },
-    addedBy: { type: mongoose.Types.ObjectId, ref: 'User', required: true },
 });
 
 const invoiceSchema = new mongoose.Schema({

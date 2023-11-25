@@ -24,7 +24,7 @@ app.use('/api/invoice', invoiceRoute)
 
 // Errors
 app.use(notFoundMiddleware)
-app.use(errorHandlerMiddleware)
+    // app.use(errorHandlerMiddleware)
 
 // run app
 let PORT = process.env.PORT || 5500

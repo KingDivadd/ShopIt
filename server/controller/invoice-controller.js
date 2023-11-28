@@ -218,10 +218,7 @@ const editSaleInvoice = asyncHandler(async(req, res) => {
     });
 
     await Promise.all(updatePromise)
-        // now let now make a new sell (we don't need to check if productExist again)
-        // for (let i = store.length; i > 0; i--) {
 
-    // }
     const update = {}
     let saleListBox = [];
 

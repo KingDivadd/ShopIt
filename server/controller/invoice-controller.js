@@ -18,7 +18,7 @@ const newSale = asyncHandler(async(req, res) => {
     if (!branchExist) {
         return res.status(404).json({ err: `Error... Branch with ID of ${branch_id} is not a registered branch!!!` })
     }
-    if (req.info.id.role !== 'CEO' && !(req.info.id.role === 'BRANCH MANAGER' || seller.branch === branch_id) && !(req.info.id.role === 'SALES PERSON' || seller.branch === branch_id)) {
+    if (req.info.id.role !== 'ADMIN' && !(req.info.id.role === 'BRANCH MANAGER' || seller.branch === branch_id) && !(req.info.id.role === 'SALES PERSON' || seller.branch === branch_id)) {
         return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to make sales in ${branchExist.location} branch` })
     }
 
@@ -129,7 +129,7 @@ const allSaleInvoice = asyncHandler(async(req, res) => {
     if (!branchExist) {
         return res.status(404).json({ err: `Error... Branch with ID of ${branch_id} is not a registered branch!!!` })
     }
-    if (req.info.id.role !== 'CEO' && String(userExist.branch) !== branch_id) {
+    if (req.info.id.role !== 'ADMIN' && String(userExist.branch) !== branch_id) {
         return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to view sale lists for ${branchExist.location} branch` })
     }
     const query = {}
@@ -170,7 +170,7 @@ const editSaleInvoice = asyncHandler(async(req, res) => {
         return res.status(404).json({ err: `Error... Invoice with ID of ${invoice_id} was not found in ${branchExist.location} branch's inventory!!!` })
     }
 
-    if (req.info.id.role !== 'CEO' && !(req.info.id.role === 'BRANCH MANAGER' || user.branch === branch_id)) {
+    if (req.info.id.role !== 'ADMIN' && !(req.info.id.role === 'BRANCH MANAGER' || user.branch === branch_id)) {
         return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to make changes to sales invoice in ${branchExist.location} branch` })
     }
 
@@ -305,7 +305,7 @@ const editSaleInvoice = asyncHandler(async(req, res) => {
 
 const deleteInvoice = asyncHandler(async(req, res) => {
     const { branch_id, invoice_id } = req.body
-    if (req.info.id.role !== 'CEO') {
+    if (req.info.id.role !== 'ADMIN') {
         return res.status(401).json({ err: `Error... ${req.info.id.name}, you're not authorized to delete any invoice!!!` })
     }
     const branchExist = await Branch.findOne({ _id: branch_id })

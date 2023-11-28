@@ -62,7 +62,7 @@ const deBranchUser = asyncHandler(async(req, res) => {
     if (!userExist) {
         return res.status(404).json({ err: `Error... User with ID ${user_id} not found!!!` })
     }
-    if (req.info.id.role !== 'CEO') {
+    if (req.info.id.role !== 'ADMIN') {
         return res.status(401).json({ err: `Error... ${req.info.id.name} you're not authorized to de-branch user!!` })
     }
     const updateUser = await User.findOneAndUpdate({ _id: user_id }, { branch: null }, { new: true, runValidators: true })
@@ -70,10 +70,9 @@ const deBranchUser = asyncHandler(async(req, res) => {
 })
 
 const updateUserInfo = asyncHandler(async(req, res) => {
-    const { id: user_id } = req.params
-    const { name, phone, role, branch } = req.body
+    const { user_id, name, phone, role, branch } = req.body
         // only a logged in user should be able to change his name and phone
-        // role can only be changed by the BRANCH MANAGER and CEO. however, a BRANCH MANAGER cannot make another BM
+        // role can only be changed by the BRANCH MANAGER and ADMIN. however, a BRANCH MANAGER cannot make another BM
         // branch can only be changed by the BRANCH MANAGER
 
     const loggedInUser = await User.findOne({ _id: req.info.id.id }).populate('branch')
@@ -82,7 +81,7 @@ const updateUserInfo = asyncHandler(async(req, res) => {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `User with ID ${user_id} not found!!!` })
     }
     const update = {}
-        // for logged in user not CEO or BM
+        // for logged in user not ADMIN or BM
     if (req.info.id.id === user_id) {
         if (name.trim() !== '') {
             update.name = name.trim()
@@ -94,7 +93,7 @@ const updateUserInfo = asyncHandler(async(req, res) => {
     // for the BM
     if (req.info.id.role === 'BRANCH MANAGER') {
         // the BM cannot make changes to the CE0 and other BMs
-        if ((userExist.role === 'BRANCH MANAGER' && userExist._id.toString() !== req.info.id.id) || userExist.role === 'CEO' || userExist.role === '') {
+        if ((userExist.role === 'BRANCH MANAGER' && userExist._id.toString() !== req.info.id.id) || userExist.role === 'ADMIN' || userExist.role === '') {
             return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform this operation!!!` })
         } else {
             // first check if the BM has as branch
@@ -137,9 +136,9 @@ const updateUserInfo = asyncHandler(async(req, res) => {
             // return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Cannot make changes beyond your jurisdiction!!!` })
         }
     }
-    // for the CEO
-    if (req.info.id.role === 'CEO') {
-        // CEO can assign branch to anyone
+    // for the ADMIN
+    if (req.info.id.role === 'ADMIN') {
+        // ADMIN can assign branch to anyone
         if (name.trim() !== '') {
             update.name = name.trim()
         }
@@ -166,13 +165,13 @@ const updateUserInfo = asyncHandler(async(req, res) => {
 })
 
 const removeUser = asyncHandler(async(req, res) => {
-    const { id: user_id } = req.params
+    const { id: user_id } = req.body
     const userExist = await User.findOne({ _id: user_id })
     if (!userExist) {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `User with ID ${user_id} not found!!!` })
     }
 
-    if (req.info.id.role === 'CEO') {
+    if (req.info.id.role === 'ADMIN') {
         const deleteUser = await User.findOneAndDelete({ _id: user_id })
         if (!deleteUser) {
             return res.status(500).json({ err: "Error... Unable to delete user!!!" })

@@ -7,7 +7,7 @@ const Branch = require("../models/branch-model")
 
 const allProducts = asyncHandler(async(req, res) => {
     const { location } = req.body
-    if (req.info.id.role === 'CEO') {
+    if (req.info.id.role === 'ADMIN') {
         const locationExist = await Branch.findOne({ location })
         if (locationExist) {
             const product = await Product.find({ productBranch: locationExist._id }).populate("productBranch", "location")
@@ -55,9 +55,9 @@ const newProduct = asyncHandler(async(req, res) => {
     if (!branchExist) {
         return res.status(500).json({ err: `Error... Product cannot be added to an unregisted business branch!!!` })
     }
-    // the ceo
+    // the ADMIN
     // || (branchExist.branchManager && String(user.branch) === branch_id)
-    if (req.info.id.role === "CEO") {
+    if (req.info.id.role === "ADMIN") {
 
         // let's check if their's a product with the same name in the db
         const products = await Product.find({ productBranch: branch_id, productName: productName })
@@ -93,7 +93,7 @@ const updateProductInfo = asyncHandler(async(req, res) => {
     }
     const productBranch = await Branch.findOne({ _id: productExist.productBranch })
 
-    if (req.info.id.role === "CEO" || (req.info.id.role === "BRANCH MANAGER" && productBranch.branchManager === req.info.id.id)) {
+    if (req.info.id.role === "ADMIN" || (req.info.id.role === "BRANCH MANAGER" && productBranch.branchManager === req.info.id.id)) {
         const update = {}
         if (productName.trim() !== '') {
             update.productName = productName.trim()
@@ -132,7 +132,7 @@ const updateProductInfo = asyncHandler(async(req, res) => {
 
 const transferProduct = asyncHandler(async(req, res) => {
     const { old_branch, productName, quantity, new_branch } = req.body
-    if (req.info.id.role !== 'CEO') {
+    if (req.info.id.role !== 'ADMIN') {
         return res.status(401).json({ err: `Error... ${req.info.name} you're not authorized to transfer product to another branch!!!` })
     }
 
@@ -220,7 +220,7 @@ const deleteProduct = asyncHandler(async(req, res) => {
 
     }
 
-    if (req.info.id.role === "CEO" || (req.info.id.role === "BRANCH MANAGER" && String(user.branch) === productExist.productBranch)) {
+    if (req.info.id.role === "ADMIN" || (req.info.id.role === "BRANCH MANAGER" && String(user.branch) === productExist.productBranch)) {
         const removeProduct = await Product.findOneAndDelete({ _id: product_id }).select("productName quantity unit")
         if (!removeProduct) {
             return res.status(500).json({ err: `Error... Unable to detele ${productExist.productName}!!!` })

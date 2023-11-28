@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema({
     email: { type: String, trim: true, required: true, unique: true },
     phone: { type: Number, trim: true },
     pic: { type: String, trim: true, default: 'http://here' },
-    role: { type: String, enum: ["CUSTOMER", "STORE MANAGER", "SALES PERSON", "BRANCH MANAGER", "CEO"] },
+    role: { type: String, enum: ["CUSTOMER", "STORE MANAGER", "SALES PERSON", "BRANCH MANAGER", "ADMIN"] },
     branch: { type: mongoose.Types.ObjectId, ref: "Branch" }
 
 }, { timestamps: true })

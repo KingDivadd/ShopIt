@@ -9,8 +9,8 @@ router.route('/filter-users').post(filterUser)
 router.route('/find-user').post(tokenDecoder, findUser)
 router.route('/de-branch-user').patch(tokenDecoder, deBranchUser)
 router.route('/one-user').post(oneUser)
-router.route('/update-user-info/:id').patch(tokenDecoder, updateUserInfo)
+router.route('/update-user-info').patch(tokenDecoder, updateUserInfo)
 router.route('/update-user-pic/:id').patch(tokenDecoder, uploadImage)
-router.route('/delete-user/:id').delete(tokenDecoder, removeUser)
+router.route('/delete-user').delete(tokenDecoder, removeUser)
 
 module.exports = router

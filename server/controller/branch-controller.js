@@ -5,10 +5,10 @@ const User = require("../models/user-model")
 const Branch = require("../models/branch-model")
 const Product = require("../models/product-model")
 
-// only the CEO can create branch. and on creation only the location is required, the rest can be filled later.
+// only the ADMIN can create branch. and on creation only the location is required, the rest can be filled later.
 const createBranch = asyncHandler(async(req, res) => {
     const { location } = req.body
-    if (req.info.id.role !== "CEO") {
+    if (req.info.id.role !== "ADMIN") {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... ${req.info.id.name} You're not authorized to create a branch!!!` })
     }
     if (!location) {
@@ -32,7 +32,7 @@ const createBranch = asyncHandler(async(req, res) => {
 // add branch staffs 
 const addBranchStaffs = asyncHandler(async(req, res) => {
     const { branch_id, branchManager, storeManager, salesPerson, } = req.body
-    if (req.info.id.role !== 'CEO' && req.info.id.role !== 'BRANCH MANAGER') {
+    if (req.info.id.role !== 'ADMIN' && req.info.id.role !== 'BRANCH MANAGER') {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
     const branchExist = await Branch.findOne({ _id: branch_id })
@@ -40,7 +40,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
     }
     const update = {}
-    if (req.info.id.role === 'CEO') {
+    if (req.info.id.role === 'ADMIN') {
         if (branchManager.trim() !== '') {
             // ensure that his role is a store manager
             const isBM = await User.findOne({ _id: branchManager })
@@ -67,7 +67,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
 
     // also ensure the branch manager can only make changes to his branch
     const bmAccess = await User.findOne({ _id: req.info.id.id })
-    if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && bmAccess.branch.toString() === branch_id)) {
+    if (req.info.id.role === 'ADMIN' || (req.info.id.role === 'BRANCH MANAGER' && bmAccess.branch.toString() === branch_id)) {
         if (storeManager.trim() !== '') {
             const isSM = await User.findOne({ _id: storeManager })
             if (!isSM) {
@@ -123,7 +123,7 @@ const addBranchStaffs = asyncHandler(async(req, res) => {
 const changeBranchLocation = asyncHandler(async(req, res) => {
     const { branch_id, location } = req.body
     const user = await User.findOne({ _id: req.info.id.id })
-    if (req.info.id.role === 'CEO' || (req.info.id.role === 'BRANCH MANAGER' && String(user.branch) === branch_id)) {
+    if (req.info.id.role === 'ADMIN' || (req.info.id.role === 'BRANCH MANAGER' && String(user.branch) === branch_id)) {
         // make sure the entered branch is not already in use
         const locationExist = await Branch.find({ location })
         if (locationExist.length) {
@@ -141,14 +141,17 @@ const changeBranchLocation = asyncHandler(async(req, res) => {
 const getAllBranch = asyncHandler(async(req, res) => {
     const { branch_id, location } = req.body
 
-    if (req.info.id.role === 'CEO' || req.info.id.role === 'BRANCH MANAGER') {
+    if (req.info.id.role !== 'ADMIN' && req.info.id.role !== 'BRANCH MANAGER') {
+        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
+    }
+    if (req.info.id.role === 'ADMIN') {
         const query = {};
         if (branch_id) {
             query._id = branch_id;
         }
 
         if (location) {
-            query.location = location;
+            query.location = { $regex: new RegExp(location, 'i') };
         }
 
         const branches = await Branch.find(query).populate("branchManager storeManager salesPerson", "name");
@@ -158,16 +161,26 @@ const getAllBranch = asyncHandler(async(req, res) => {
         }
 
         res.status(StatusCodes.OK).json({ nbHit: branches.length, allBranch: branches });
-
-
-    } else {
-        res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... You're not authorized to perform such operation!!!` })
     }
+    if (req.info.id.role === 'BRANCH MANAGER') {
+        const user = await User.findOne({ _id: req.info.id.id })
+        if (!user.branch || user.branch === null) {
+            return res.status(500).json({ err: `Error... ${user.name}, with role as Branch Manager hasn't been assigned to any branch yet!!!` })
+        }
+        const branch_id = user.branch
+        const branchExist = await Branch.findOne({ _id: branch_id })
+        if (!branchExist) {
+            return res.status(404).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
+        }
+        return res.status(200).json({ branch: branchExist })
+
+    }
+
 
 })
 const deleteBranch = asyncHandler(async(req, res) => {
     const { branch_id } = req.body
-    if (req.info.id.role !== 'CEO') {
+    if (req.info.id.role !== 'ADMIN') {
         return res.status(401).json({ err: `Error... ${req.info.id.id} you're not authorized to delete any branch!!!` })
     }
     const branchExist = await Branch.findOne({ _id: branch_id })

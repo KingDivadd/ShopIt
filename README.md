@@ -75,4 +75,4 @@
         1.  New sale
         2.  Edit the sale invoice
         3.  Fetch all sale invoice [only fetches those of user branch]
-        4.  Delete Invoice [restriced to only the admins]
+        4.  Delete Invoice [restriced to only the admin]

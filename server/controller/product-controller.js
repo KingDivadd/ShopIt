@@ -24,16 +24,15 @@ const allProducts = asyncHandler(async(req, res) => {
     if (!user) {
         return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... User with ID ${user._id} was not found!!!` })
     }
-    const branch_id = user.branch
-    if (branch_id === null) {
+    if (!user.branch) {
         return res.status(StatusCodes.UNAUTHORIZED).json({ err: `Error... Only branch registred users can view branch products!!!` })
     }
-    const branchExist = await Branch.findOne({ _id: String(branch_id) })
+    const branchExist = await Branch.findOne({ _id: String(user.branch) })
     if (!branchExist) {
-        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${branch_id} not found!!!` })
+        return res.status(StatusCodes.NOT_FOUND).json({ err: `Error... Branch with ID ${user.branch} not found!!!` })
     }
     const product = await Product.find({
-        productBranch: { $eq: branch_id }
+        productBranch: { $eq: user.branch }
     }).populate("productBranch", "location")
     if (!product.length) {
         return res.status(StatusCodes.OK).json({ msg: `No product has been added to ${branchExist.location} branch yet...` })
@@ -148,14 +147,14 @@ const transferProduct = asyncHandler(async(req, res) => {
         return res.status(404).json({ err: `Error... Branch with ID ${old_branch} not found!!!` })
     }
     const productList = old_branchExist.productList
-    let index = null
+    let index = ''
     const old_branch_info = {}
     productList.forEach((data, ind) => {
         if (data.productName === productName) {
             index = ind
         }
     });
-    if (index === null) {
+    if (index === '') {
         return res.status(404).json({ err: `Error... ${productName} isn't available in ${old_branchExist.location} branch!!!` })
     }
     const product = await Product.findOne({ _id: productList[index]._id })
@@ -169,7 +168,7 @@ const transferProduct = asyncHandler(async(req, res) => {
 
     const update_old_product = await Product.findOneAndUpdate({ _id: product._id }, { $set: old_branch_info }, { new: true, runValidators: true }).select("productName price quantity totalCost productBranch").populate("productBranch", "location")
 
-    let new_index = null
+    let new_index = ''
     const new_branch_info = {}
     const new_branchExist = await Branch.findOne({ _id: new_branch }).populate("productList", "productName")
     if (!new_branchExist) {
@@ -181,7 +180,7 @@ const transferProduct = asyncHandler(async(req, res) => {
             new_index = ind
         }
     });
-    if (new_index === null) {
+    if (new_index === '') {
         return res.status(404).json({ err: `Error... ${productName} isn't present in ${new_branchExist.location} branch` })
             // here we will create a new product in the branch
     }
@@ -209,12 +208,12 @@ const deleteProduct = asyncHandler(async(req, res) => {
     if (!user) {
         return res.status(404).json({ err: `Error... User not found!!!` })
     }
-    if (user.branch === null) {
+    if (!user.branch) {
         return res.status(401).json({ err: `Error... You're not authorized to delete product` })
     }
 
 
-    if (productExist.productBranch === null) {
+    if (!productExist.productBranch) {
         const removeProduct = await Product.findOneAndDelete({ _id: product_id })
         return res.status(StatusCodes.OK).json({ msg: `Product deleted successfully`, deletedProduct: removeProduct })
 

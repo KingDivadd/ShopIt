@@ -164,7 +164,7 @@ const getAllBranch = asyncHandler(async(req, res) => {
     }
     if (req.info.id.role === 'BRANCH MANAGER') {
         const user = await User.findOne({ _id: req.info.id.id })
-        if (!user.branch || user.branch === null) {
+        if (!user.branch) {
             return res.status(500).json({ err: `Error... ${user.name}, with role as Branch Manager hasn't been assigned to any branch yet!!!` })
         }
         const branch_id = user.branch
@@ -187,8 +187,8 @@ const deleteBranch = asyncHandler(async(req, res) => {
     if (!branchExist) {
         return res.status(404).json({ err: `Error... Branch with ID '${branch_id}' not found!!!` })
     }
-    // first all users who is linked to this branch will have it's id replaced by null
-    await User.updateMany({ branch: branch_id }, { branch: null }, { new: true, runValidators: true })
+    // first all users who is linked to this branch will have it's id replaced by nothing
+    await User.updateMany({ branch: branch_id }, { $unset: { branch: 1 } }, { new: true, runValidators: true })
         // delete all product in the branch
 
     // delete all invoice in the branch

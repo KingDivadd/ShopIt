@@ -65,7 +65,7 @@ const deBranchUser = asyncHandler(async(req, res) => {
     if (req.info.id.role !== 'ADMIN') {
         return res.status(401).json({ err: `Error... ${req.info.id.name} you're not authorized to de-branch user!!` })
     }
-    const updateUser = await User.findOneAndUpdate({ _id: user_id }, { branch: null }, { new: true, runValidators: true })
+    const updateUser = await User.findOneAndUpdate({ _id: user_id }, { $unset: { branch: 1 } }, { new: true, runValidators: true })
     return res.status(200).json({ msg: `${updateUser.name} has been successfully removed from his branch...`, newUserInfo: updateUser })
 })
 
